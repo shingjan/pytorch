@@ -3080,7 +3080,7 @@ class Convolution(ExternKernelAlloc):
                 f"import {config.inductor_import}.triton_ops.conv as {self.kernel}"
             )
         elif self.kernel == "tvm_ops.conv":
-            wrapper.header.writeline(f"import torchinductor.tvm_ops.conv as conv")
+            wrapper.header.writeline(f"import torch._inductor.tvm_ops.conv as conv")
         wrapper.writeline(f"{self.get_name()} = conv({', '.join(self.codegen_args())})")
         if isinstance(self.layout, Layout):
             self.codegen_size_asserts(wrapper)

@@ -3079,9 +3079,9 @@ class Convolution(ExternKernelAlloc):
             wrapper.header.writeline(
                 f"import {config.inductor_import}.triton_ops.conv as {self.kernel}"
             )
-        wrapper.writeline(
-            f"{self.get_name()} = {self.kernel}({', '.join(self.codegen_args())})"
-        )
+        elif self.kernel == "tvm_ops.conv":
+            wrapper.header.writeline(f"import torchinductor.tvm_ops.conv as conv")
+        wrapper.writeline(f"{self.get_name()} = conv({', '.join(self.codegen_args())})")
         if isinstance(self.layout, Layout):
             self.codegen_size_asserts(wrapper)
 
@@ -3140,8 +3140,18 @@ class Convolution(ExternKernelAlloc):
         _, _, *kernel_size = weight_shape
 
         # choose runtime kernel
-        config_conv = config.triton.convolution
+        config_conv = config.tvm.convolution
         if (
+            config_conv == "triton"
+            and len(kernel_size) == 2
+            and is_triton(x.get_device())
+            and not transposed
+            and groups == 1
+        ):
+            kernel = "triton_ops.conv"
+        elif config_conv == "tvm":
+            kernel = "tvm_ops.conv"
+        elif (
             config_conv == "aten"
             or len(kernel_size) != 2  # triton conv only supports conv2d
             or not is_triton(x.get_device())
@@ -3151,8 +3161,6 @@ class Convolution(ExternKernelAlloc):
             # or x.get_dtype() == torch.bfloat16
         ):
             kernel = "aten.convolution"
-        elif config_conv == "triton":
-            kernel = "triton_ops.conv"
         else:
             assert config_conv == "autotune"
             from .codegen.autotuner import tuned_conv

@@ -1077,6 +1077,9 @@ class Scheduler:
             from .codegen.cpp import CppScheduling
 
             return CppScheduling(self)
+            from .codegen.tvm import TIRScheduling
+
+            return TIRScheduling(self)
         else:
             if not has_triton():
                 device_props = torch.cuda.get_device_properties(device)

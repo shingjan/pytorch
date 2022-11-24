@@ -6,7 +6,7 @@ from itertools import count
 from typing import Any, Dict, List
 
 from .. import codecache, config, ir
-from ..utils import dynamo_utils, has_triton, sympy_dot, sympy_product
+from ..utils import dynamo_utils, has_triton, has_tvm, sympy_dot, sympy_product
 from ..virtualized import V
 from .common import CodeGen, DeferredLine, IndentedBuffer, Kernel
 from .triton import texpr
@@ -217,6 +217,15 @@ class WrapperCodeGen(CodeGen):
                 self.header.writeline(
                     f"from {config.inductor_import}.triton_ops.batched_matmul import bmm_out as triton_bmm_out"
                 )
+
+        if has_tvm():
+            self.header.splice(
+                """
+                import tvm
+                from tvm import tir
+                from tvm.script import tir as T
+                """
+            )
 
         self.prefix.splice(
             """

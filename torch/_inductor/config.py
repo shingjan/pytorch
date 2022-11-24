@@ -148,6 +148,15 @@ class triton:
     simple_where = True
 
 
+class tvm:
+    # should we give different names to kernels
+    ordered_kernel_names = False
+    # choose conv backend, "aten" or "tvm"
+    convolution = "tvm"
+    # choose mm backend, "aten" or "tvm"
+    mm = "aten"
+
+
 # create a directory containing lots of debug information
 class trace:
     # master switch for all debugging flags below

@@ -42,6 +42,16 @@ def has_triton():
 
 
 @functools.lru_cache(None)
+def has_tvm():
+    try:
+        import tvm
+
+        return tvm is not None
+    except (ImportError, ModuleNotFoundError):
+        return False
+
+
+@functools.lru_cache(None)
 def has_torchvision_roi_align():
     try:
         from torchvision.ops import roi_align  # noqa: F401

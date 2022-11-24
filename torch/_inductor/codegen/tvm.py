@@ -12,7 +12,7 @@ from typing import List
 import sympy
 import torch
 
-import torchinductor
+import torch._inductor as torchinductor
 
 from .. import config
 from .. import ir
@@ -27,7 +27,7 @@ from .common import ExprPrinter
 from .common import IndentedBuffer
 from .common import Kernel
 from .common import OpOverrides
-from .common import TIRCSE
+from .common import CSE  # TIRCSE
 from .common import index_prevent_reordering
 
 log = logging.getLogger(__name__)
@@ -249,7 +249,7 @@ class TIRKernel(Kernel):
 
     def __init__(self, reduction_hint=ReductionHint.DEFAULT):
         super(TIRKernel, self).__init__()
-        self.cse = TIRCSE(self.newvar_prefix, self.suffix)
+        self.cse = CSE(self.newvar_prefix, self.suffix)
         self.iter_vars_count = itertools.count()
         self.body = IndentedBuffer()
         self.indexing_code = IndentedBuffer()
@@ -347,8 +347,8 @@ class TIRKernel(Kernel):
                 @T.prim_func
         """
         code.splice(heuristics_line)
-
-        argdefs, _ = self.args.python_argdefs()
+        print(self.args.python_argdefs())
+        argdefs, _, _ = self.args.python_argdefs()
         # TODO(shingjan): ideally this should come from self.size/self.ranges
         argdefs_shape = []
         for _, value in V.graph.graph_inputs.items():
@@ -373,17 +373,17 @@ class TIRKernel(Kernel):
             return code.getvalue()
 
         wrapper = IndentedBuffer()
-        wrapper.writeline("TIRCodeCache.load('''")
+        wrapper.writeline("async_compile.tvm('''")
         wrapper.splice(code.getvalue(), strip=True)
         wrapper.writeline('mod = tvm.build(Module, target="llvm --num-cores=16")')
-        wrapper.writeline("''').mod")
+        wrapper.writeline("''')")
         print("-------TIR printout-------\n")
         print(wrapper.getvalue())
         print("-------TIR printout-------\n")
         return wrapper.getvalue()
 
     def call_kernel(self, code, name: str):
-        argdefs, call_args = self.args.python_argdefs()
+        argdefs, call_args, _ = self.args.python_argdefs()
         # TODO(shingjan): constant can be further simplified/folded
         call_args_nd = []
         for idx in range(len(argdefs) - 1):
@@ -449,7 +449,7 @@ class TIRScheduling:
         if src_code in wrapper.kernels:
             kernel_name = wrapper.kernels[src_code]
         else:
-            kernel_name = wrapper.next_kernel_name()
+            kernel_name = "kernel_tir_" + wrapper.next_kernel_suffix()
             wrapper.kernels[src_code] = kernel_name
             subs_name = kernel_name if config.tvm.ordered_kernel_names else "kernel"
             # src_code = src_code.format(kernel_name=subs_name)

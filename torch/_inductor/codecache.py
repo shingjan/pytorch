@@ -591,6 +591,12 @@ class AsyncCompile:
 
         return self.submit(task)
 
+    def tvm(self, source_code):
+        def task():
+            return TIRCodeCache.load(source_code).kernel
+
+        return self.submit(task)
+
     def wait(self, scope: Dict[str, Any]):
         if config.compile_threads > 1:
             for key, result in list(scope.items()):

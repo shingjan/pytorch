@@ -1074,9 +1074,9 @@ class Scheduler:
         ), f"{device} should have been normalized in lowering"
         V.graph.device_types.add(device.type)
         if device.type == "cpu":
-            from .codegen.cpp import CppScheduling
+            # from .codegen.cpp import CppScheduling
 
-            return CppScheduling(self)
+            # return CppScheduling(self)
             from .codegen.tvm import TIRScheduling
 
             return TIRScheduling(self)

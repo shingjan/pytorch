@@ -12,7 +12,7 @@ from tvm.relay.frontend.pytorch import _convert_data_type
 
 import torch
 
-rt_modules_json_file = "rt_libs/modules.json"
+rt_modules_json_file = "rt_libs/modules_llvm.json"
 
 
 class conv_runtime_module:
@@ -41,7 +41,7 @@ class conv_runtime_module:
         self.dilation = list(dilation)
         self.transposed = transposed
         self.output_padding = list(output_padding)
-        self.groups = groups
+        self.groups = int(groups)
         self.uuid = str(uuid)
 
     def is_same(self, other_module):
@@ -152,7 +152,7 @@ class _conv:
             weight = _op.transform.reshape(weight, new_weight_shape)
 
         kernel_size = weight_shape[2:]
-        use_bias = isinstance(bias, _expr.Expr)
+        use_bias = bias != None
 
         # We are trying to invoke various relay operations through a single conv_op variable.
         # However the function signatures for some operations have additional attributes so we
@@ -220,6 +220,11 @@ class _conv:
             **additional_arguments,
         )
         if use_bias:
+            bias = relay.var(
+                "bias",
+                shape=bias.shape,
+                dtype=_convert_data_type(str(bias.dtype), "float32"),
+            )
             res = _op.nn.bias_add(conv_out, bias)
         else:
             res = conv_out

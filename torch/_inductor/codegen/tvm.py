@@ -425,7 +425,7 @@ class TIRScheduling:
             print(node.debug_str_extra())
 
         with TIRKernel() as kernel:
-            vars, reduction_vars = kernel.set_ranges([group], ())
+            vars, reduction_vars = kernel.set_ranges(group, reduction_group)
 
             for node in nodes:
                 if node.group[1] in [

@@ -1074,9 +1074,9 @@ class Scheduler:
         ), f"{device} should have been normalized in lowering"
         V.graph.device_types.add(device.type)
         if device.type == "cpu":
-            # from .codegen.cpp import CppScheduling
+            from .codegen.cpp import CppScheduling
 
-            # return CppScheduling(self)
+            return CppScheduling(self)
             from .codegen.tvm import TIRScheduling
 
             return TIRScheduling(self)
@@ -1118,6 +1118,7 @@ class Scheduler:
             self.buffer_names_to_free.update(node.last_usage)
 
             if node.is_template():
+                print("template")
                 self.codegen_template_call(node)
             elif node.is_extern():
                 self.codegen_extern_call(node)

@@ -475,7 +475,8 @@ class TIRCodeCache:
     @classmethod
     def load(cls, source_code):
         patch_tir_dir()
-        return PyCodeCache.load(source_code)
+        mod = PyCodeCache.load(source_code)
+        return getattr(mod, cls.get_name(mod))
 
 
 class AsyncCompile:

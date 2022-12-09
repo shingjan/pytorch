@@ -1,114 +1,112 @@
+import uuid
+import json
+
 import tvm
 from tvm import relay
-from tvm.script import tir as T
 from tvm.relay import expr as _expr
 from tvm.relay import op as _op
 from tvm.contrib import graph_executor
 from tvm import meta_schedule as ms
+from tvm.relay.frontend.pytorch import _convert_data_type
+
 
 import torch
 
-# fmt: off
-@tvm.script.ir_module
-class Module:
-    @T.prim_func
-    def main(p0: T.Buffer[(64, 3, 7, 7), "float32"], p1: T.Buffer[(8, 3, 224, 224), "float32"], out_ptr0: T.Buffer[(8, 64, 112, 112), "float32"]) -> None:
-        # function attr dict
-        T.func_attr({"global_symbol": "main", "tir.noalias": True})
-        # body
-        # with T.block("root")
-        T_layout_trans = T.alloc_buffer([16, 1, 7, 7, 3, 4], dtype="float32")
-        T_layout_trans_1 = T.alloc_buffer([8, 1, 224, 224, 3], dtype="float32")
-        data_pad = T.alloc_buffer([8, 1, 230, 230, 3], dtype="float32")
-        conv2d_NCHWc = T.alloc_buffer([8, 16, 112, 112, 4], dtype="float32")
-        conv2d_NCHWc_global = T.alloc_buffer([8, 16, 112, 112, 4], dtype="float32")
-        for i0_i1_i2_fused in T.parallel(1840, annotations={"pragma_auto_unroll_max_step":512, "pragma_unroll_explicit":1}):
-            for ax0, ax1, ax2, ax3 in T.grid(1, 1, 1, 224):
-                for ax4_fused in T.vectorized(3):
-                    with T.block("T_layout_trans_1"):
-                        T.where(3 <= i0_i1_i2_fused % 230 and i0_i1_i2_fused % 230 < 227)
-                        ax0_1 = T.axis.spatial(8, i0_i1_i2_fused // 230 + ax0)
-                        ax1_1 = T.axis.spatial(1, ax1)
-                        ax2_1 = T.axis.spatial(224, i0_i1_i2_fused % 230 + -3 + ax2)
-                        ax3_1, ax4 = T.axis.remap("SS", [ax3, ax4_fused])
-                        T.reads(p0[ax0_1, ax1_1 * 3 + ax4, ax2_1, ax3_1])
-                        T.writes(T_layout_trans_1[ax0_1, ax1_1, ax2_1, ax3_1, ax4])
-                        T_layout_trans_1[ax0_1, ax1_1, ax2_1, ax3_1, ax4] = T.if_then_else(ax0_1 < 8 and ax1_1 * 3 + ax4 < 3 and ax2_1 < 224 and ax3_1 < 224, p1[ax0_1, ax1_1 * 3 + ax4, ax2_1, ax3_1], T.float32(0), dtype="float32")
-            for i3 in T.serial(230):
-                for i4_fused in T.vectorized(3):
-                    with T.block("data_pad"):
-                        i0_1 = T.axis.spatial(8, i0_i1_i2_fused // 230)
-                        i1_1 = T.axis.spatial(1, 0)
-                        i2_1 = T.axis.spatial(230, i0_i1_i2_fused % 230)
-                        i3_1, i4_1 = T.axis.remap("SS", [i3, i4_fused])
-                        T.reads(T_layout_trans_1[i0_1, i1_1, i2_1 - 3, i3_1 - 3, i4_1])
-                        T.writes(data_pad[i0_1, i1_1, i2_1, i3_1, i4_1])
-                        data_pad[i0_1, i1_1, i2_1, i3_1, i4_1] = T.if_then_else(3 <= i2_1 and i2_1 < 227 and 3 <= i3_1 and i3_1 < 227, T_layout_trans_1[i0_1, i1_1, i2_1 - 3, i3_1 - 3, i4_1], T.float32(0), dtype="float32")
-        for i0_0_i1_0_i2_0_fused in T.parallel(896, annotations={"pragma_auto_unroll_max_step":512, "pragma_unroll_explicit":1}):
-            for ax0, ax1, ax2, ax3, ax4 in T.grid(4, 1, 7, 7, 3):
-                for ax5_fused in T.vectorized(4):
-                    with T.block("T_layout_trans"):
-                        ax0_2 = T.axis.spatial(16, i0_0_i1_0_i2_0_fused % 448 // 112 * 4 + ax0)
-                        ax1_2, ax2_2, ax3_2, ax4_1, ax5 = T.axis.remap("SSSSS", [ax1, ax2, ax3, ax4, ax5_fused])
-                        T.reads(p0[ax0_2 * 4 + ax5, ax1_2 * 3 + ax4_1, ax2_2, ax3_2])
-                        T.writes(T_layout_trans[ax0_2, ax1_2, ax2_2, ax3_2, ax4_1, ax5])
-                        T_layout_trans[ax0_2, ax1_2, ax2_2, ax3_2, ax4_1, ax5] = T.if_then_else(ax0_2 * 4 + ax5 < 64 and ax1_2 * 3 + ax4_1 < 3 and ax2_2 < 7 and ax3_2 < 7, p0[ax0_2 * 4 + ax5, ax1_2 * 3 + ax4_1, ax2_2, ax3_2], T.float32(0), dtype="float32")
-            for i3_0, i4_0, i0_1, i1_1, i2_1, i3_1, i4_1 in T.grid(1, 1, 4, 1, 1, 56, 1):
-                for i0_2_init, i1_2_init, i2_2_init, i3_2_init, i4_2_init, i0_3_init, i1_3_init, i2_3_init, i3_3_init in T.grid(1, 1, 1, 1, 1, 1, 4, 1, 2):
-                    for i4_3_fused_init in T.vectorized(4):
-                        with T.block("conv2d_NCHWc_init"):
-                            n = T.axis.spatial(8, i0_2_init + i0_3_init + i0_0_i1_0_i2_0_fused // 448 * 4 + i0_1)
-                            oc_chunk = T.axis.spatial(16, i0_0_i1_0_i2_0_fused % 448 // 112 * 4 + i1_1 * 4 + i1_2_init * 4 + i1_3_init)
-                            oh = T.axis.spatial(112, i0_0_i1_0_i2_0_fused % 112 + i2_1 + i2_2_init + i2_3_init)
-                            ow = T.axis.spatial(112, i3_0 * 112 + i3_1 * 2 + i3_2_init * 2 + i3_3_init)
-                            oc_block = T.axis.spatial(4, i4_0 * 4 + i4_1 * 4 + i4_2_init * 4 + i4_3_fused_init)
-                            T.reads()
-                            T.writes(conv2d_NCHWc_global[n, oc_chunk, oh, ow, oc_block])
-                            T.block_attr({"meta_schedule.tiling_structure":"SSRSRS", "workload":["conv2d_NCHWc.x86", ["TENSOR", [8, 1, 224, 224, 3], "float32"], ["TENSOR", [16, 1, 7, 7, 3, 4], "float32"], [2, 2], [3, 3, 3, 3], [1, 1], "NCHW3c", "NCHW4c", "float32"]})
-                            conv2d_NCHWc_global[n, oc_chunk, oh, ow, oc_block] = T.float32(0)
-                for i5_0, i6_0, i7_0, i0_2, i1_2, i2_2, i3_2, i4_2, i5_1, i6_1, i7_1, i0_3, i1_3, i2_3, i3_3 in T.grid(3, 7, 1, 1, 1, 1, 1, 1, 1, 1, 7, 1, 4, 1, 2):
-                    for i4_3_fused in T.vectorized(4):
-                        with T.block("conv2d_NCHWc_update"):
-                            n = T.axis.spatial(8, i0_2 + i0_3 + i0_0_i1_0_i2_0_fused // 448 * 4 + i0_1)
-                            oc_chunk = T.axis.spatial(16, i0_0_i1_0_i2_0_fused % 448 // 112 * 4 + i1_1 * 4 + i1_2 * 4 + i1_3)
-                            oh = T.axis.spatial(112, i0_0_i1_0_i2_0_fused % 112 + i2_1 + i2_2 + i2_3)
-                            ow = T.axis.spatial(112, i3_0 * 112 + i3_1 * 2 + i3_2 * 2 + i3_3)
-                            oc_block = T.axis.spatial(4, i4_0 * 4 + i4_1 * 4 + i4_2 * 4 + i4_3_fused)
-                            ic = T.axis.reduce(3, i5_1 + i5_0)
-                            kh = T.axis.reduce(7, i6_0 + i6_1)
-                            kw = T.axis.reduce(7, i7_0 * 7 + i7_1)
-                            T.reads(conv2d_NCHWc_global[n, oc_chunk, oh, ow, oc_block], data_pad[n, ic // 3, oh * 2 + kh, ow * 2 + kw, ic % 3], T_layout_trans[oc_chunk, ic // 3, kh, kw, ic % 3, oc_block])
-                            T.writes(conv2d_NCHWc_global[n, oc_chunk, oh, ow, oc_block])
-                            T.block_attr({"meta_schedule.tiling_structure":"SSRSRS", "workload":["conv2d_NCHWc.x86", ["TENSOR", [8, 1, 224, 224, 3], "float32"], ["TENSOR", [16, 1, 7, 7, 3, 4], "float32"], [2, 2], [3, 3, 3, 3], [1, 1], "NCHW3c", "NCHW4c", "float32"]})
-                            conv2d_NCHWc_global[n, oc_chunk, oh, ow, oc_block] = conv2d_NCHWc_global[n, oc_chunk, oh, ow, oc_block] + data_pad[n, ic // 3, oh * 2 + kh, ow * 2 + kw, ic % 3] * T_layout_trans[oc_chunk, ic // 3, kh, kw, ic % 3, oc_block]
-                for ax0_3, ax1_3, ax2_3 in T.grid(1, 4, 1):
-                    for ax3_ax4_fused in T.vectorized(8):
-                        with T.block("conv2d_NCHWc_global"):
-                            v0 = T.axis.spatial(8, i0_0_i1_0_i2_0_fused // 448 * 4 + i0_1 + ax0_3)
-                            v1 = T.axis.spatial(16, i0_0_i1_0_i2_0_fused % 448 // 112 * 4 + ax1_3)
-                            v2 = T.axis.spatial(112, i0_0_i1_0_i2_0_fused % 112 + ax2_3)
-                            v3 = T.axis.spatial(112, i3_1 * 2 + ax3_ax4_fused // 4)
-                            v4 = T.axis.spatial(4, ax3_ax4_fused % 4)
-                            T.reads(conv2d_NCHWc_global[v0, v1, v2, v3, v4])
-                            T.writes(conv2d_NCHWc[v0, v1, v2, v3, v4])
-                            conv2d_NCHWc[v0, v1, v2, v3, v4] = conv2d_NCHWc_global[v0, v1, v2, v3, v4]
-        for i0_i1_fused in T.parallel(512, annotations={"pragma_auto_unroll_max_step":512, "pragma_unroll_explicit":1}):
-            for i2, i3 in T.grid(112, 112):
-                with T.block("out_ptr0"):
-                    ax0_4 = T.axis.spatial(8, i0_i1_fused // 64)
-                    ax1_4 = T.axis.spatial(64, i0_i1_fused % 64)
-                    ax2_4, ax3_3 = T.axis.remap("SS", [i2, i3])
-                    T.reads(conv2d_NCHWc[ax0_4, ax1_4 // 4, ax2_4, ax3_3, ax1_4 % 4])
-                    T.writes(out_ptr0[ax0_4, ax1_4, ax2_4, ax3_3])
-                    out_ptr0[ax0_4, ax1_4, ax2_4, ax3_3] = T.if_then_else(ax0_4 < 8 and ax1_4 < 64 and ax2_4 < 112 and ax3_3 < 112, conv2d_NCHWc[ax0_4, ax1_4 // 4, ax2_4, ax3_3, ax1_4 % 4], T.float32(0), dtype="float32")
-# fmt: on
+rt_modules_json_file = "rt_libs/modules.json"
+
+
+class conv_runtime_module:
+    def __init__(
+        self,
+        x_shape,
+        x_dtype,
+        w_shape,
+        w_dtype,
+        bias,
+        stride,
+        padding,
+        dilation,
+        transposed,
+        output_padding,
+        groups,
+        uuid,
+    ):
+        self.x_shape = list(x_shape)
+        self.x_dtype = str(x_dtype)
+        self.w_shape = list(w_shape)
+        self.w_dtype = str(w_dtype)
+        self.bias = bias
+        self.stride = list(stride)
+        self.padding = list(padding)
+        self.dilation = list(dilation)
+        self.transposed = transposed
+        self.output_padding = list(output_padding)
+        self.groups = groups
+        self.uuid = str(uuid)
+
+    def is_same(self, other_module):
+        if self.x_shape != other_module.x_shape:
+            return False
+        if self.x_dtype != other_module.x_dtype:
+            return False
+        if self.w_shape != other_module.w_shape:
+            return False
+        if self.w_dtype != other_module.w_dtype:
+            return False
+        if self.bias != other_module.bias:
+            return False
+        if self.stride != other_module.stride:
+            return False
+        if self.padding != other_module.padding:
+            return False
+        if self.dilation != other_module.dilation:
+            return False
+        if self.transposed != other_module.transposed:
+            return False
+        if self.output_padding != other_module.output_padding:
+            return False
+        if self.groups != other_module.groups:
+            return False
+        return True
+
+    def set_runtime_module(self, runtime_module):
+        self.runtime_module = runtime_module
+
+    def get_runtime_module(self):
+        if self.runtime_module == None:
+            raise ValueError("runtime_module cannot be None")
+        return self.runtime_module
+
+    def set_runtime_lib(self, runtime_lib):
+        self.runtime_lib = runtime_lib
+
+    def get_runtime_lib(self):
+        if self.runtime_lib == None:
+            raise ValueError("runtime_lib cannot be None")
+        return self.runtime_lib
+
+    def update_json(self, filename):
+        with open(filename, "r+") as file:
+            file_data = json.load(file)
+            file_data["modules"].append(json.dumps(self.__dict__))
+            file.seek(0)
+            json.dump(file_data, file, indent=4)
 
 
 class _conv:
+    def __init__(self):
+        # list of conv_runtime_modules
+        self.modules = []
+        with open(rt_modules_json_file, "r+") as file:
+            file_data = json.load(file)
+            for mod in file_data["modules"]:
+                x = json.loads(mod, object_hook=lambda d: conv_runtime_module(**d))
+                self.modules.append(x)
+
     @staticmethod
     def convolution(
-        x_shape,
-        w_shape,
+        x,
+        w,
         bias,
         stride,
         padding,
@@ -120,13 +118,21 @@ class _conv:
         # Use transpose or normal
         use_transpose = transposed
 
-        data = relay.var("data", shape=x_shape)
-        weight = relay.var("weight", shape=w_shape)
+        data = relay.var(
+            "data",
+            shape=x.shape,
+            dtype=_convert_data_type(str(x.dtype), "float32"),
+        )
+        weight = relay.var(
+            "weight",
+            shape=w.shape,
+            dtype=_convert_data_type(str(w.dtype), "float32"),
+        )
         strides = tuple(stride)
         padding = tuple(padding)
         dilation = tuple(dilation)
         groups = int(groups)
-        weight_shape = w_shape
+        weight_shape = w.shape
 
         if use_transpose:
             channels = weight_shape[1] * groups
@@ -223,8 +229,16 @@ class _conv:
             res = _op.squeeze(res, axis=[2])
         return res
 
-    @staticmethod
+    def exist_module(self, module):
+        for mod in self.modules:
+            if mod.is_same(module):
+                module.uuid = mod.uuid
+                print("cache hit!")
+                return True
+        return False
+
     def _call(
+        self,
         x,
         w,
         bias,
@@ -235,9 +249,11 @@ class _conv:
         output_padding,
         groups,
     ):
-        relay_func = _conv.convolution(
+        module = conv_runtime_module(
             x.shape,
+            x.dtype,
             w.shape,
+            w.dtype,
             bias,
             stride,
             padding,
@@ -245,12 +261,33 @@ class _conv:
             transposed,
             output_padding,
             groups,
+            uuid.uuid4(),
         )
-        mod = tvm.IRModule.from_expr(relay_func)
-        target = tvm.target.Target("llvm --num-cores=16")
-        lib = _conv.tune_with_tvm(mod, target, {})
-        print(relay_func)
-        ctx = tvm.cpu()
+        if self.exist_module(module) == False:
+            relay_func = _conv.convolution(
+                x,
+                w,
+                bias,
+                stride,
+                padding,
+                dilation,
+                transposed,
+                output_padding,
+                groups,
+            )
+            print(relay_func)
+            mod = tvm.IRModule.from_expr(relay_func)
+            # target = tvm.target.cuda()
+            # target = tvm.target.Target("nvidia/geforce-rtx-3070")
+            target = tvm.target.Target("llvm --num-cores=16")
+            lib = _conv.tune_with_tvm(mod, target, {})
+            lib.export_library(f"rt_libs/{module.uuid}_lib.so")
+            module.update_json(filename=rt_modules_json_file)
+            # put it back into the cache
+            self.modules.append(module)
+
+        ctx = tvm.device("cpu", 0)
+        lib = tvm.runtime.load_module(f"rt_libs/{module.uuid}_lib.so")
         m = graph_executor.GraphModule(lib["default"](ctx))
         m.set_input("data", tvm.nd.from_dlpack(x.detach().contiguous()))
         m.set_input("weight", tvm.nd.from_dlpack(w.detach().contiguous()))
@@ -259,16 +296,13 @@ class _conv:
 
     @staticmethod
     def tune_with_tvm(mod, target, params):
+        return _conv.tune_with_relay(mod, target, params)
         import tempfile
 
-        tasks = ms.relay_integration.extract_tasks(mod, target, params)
-        for tsk in tasks:
-            print(tsk.dispatched[0].script())
-        return _conv.tune_with_relay(mod, target, params)
         with tempfile.TemporaryDirectory() as work_dir:
             database = ms.relay_integration.tune_relay(
                 mod=mod,
-                target=tvm.target.Target("llvm --num-cores=12"),
+                target=target,
                 work_dir=work_dir,
                 max_trials_global=20000,
                 num_trials_per_iter=64,
@@ -278,7 +312,7 @@ class _conv:
             lib = ms.relay_integration.compile_relay(
                 database=database,
                 mod=mod,
-                target=tvm.target.Target("llvm --num-cores=12"),
+                target=target,
                 params=params,
             )
         return lib
@@ -289,8 +323,8 @@ class _conv:
             lib = relay.build(mod, target=target, params=params)
         return lib
 
-    @staticmethod
     def forward(
+        self,
         x,
         w,
         bias,
@@ -301,7 +335,7 @@ class _conv:
         output_padding=(0, 0),
         groups=1,
     ):
-        return _conv._call(
+        return self._call(
             x,
             w,
             bias,
@@ -314,4 +348,6 @@ class _conv:
         )
 
 
-conv = _conv.forward
+_conv_object = _conv()
+
+conv = _conv_object.forward

@@ -277,6 +277,7 @@ class TritonTemplateKernel(TritonKernel):
 
 
 def should_use_template(node: ir.ExternKernel):
+    return False
     template_kernels = [ir.Convolution, ir.MatrixMultiply]
     if type(node) in template_kernels and ir.is_triton(node.get_device()):
         if isinstance(node, ir.Convolution):

@@ -14,7 +14,8 @@ import torch
 
 
 save_module = True
-rt_modules_json_file = "rt_libs/modules_cuda.json"
+rt_libs_dir = "/home/yj/pytorch/rt_libs"
+rt_modules_json_file = f"{rt_libs_dir}/modules_cuda.json"
 ctx = tvm.cuda(0)
 # ctx = tvm.cpu(0)
 target = tvm.target.Target("nvidia/geforce-rtx-3070")
@@ -112,7 +113,7 @@ class _conv:
                     module = json.loads(
                         mod, object_hook=lambda d: conv_runtime_module(**d)
                     )
-                    lib = tvm.runtime.load_module(f"rt_libs/{module.uuid}_lib.so")
+                    lib = tvm.runtime.load_module(f"{rt_libs_dir}/{module.uuid}_lib.so")
                     m = graph_executor.GraphModule(lib["default"](ctx))
                     module.set_runtime_module(m)
                     self.modules.append(module)
@@ -253,7 +254,6 @@ class _conv:
             if mod.is_same(module):
                 module.uuid = mod.uuid
                 module.set_runtime_module(mod.get_runtime_module())
-                print("cache hit!")
                 return True
         return False
 
@@ -299,7 +299,7 @@ class _conv:
             mod = tvm.IRModule.from_expr(relay_func)
             lib = _conv.tune_with_tvm(mod, target, {})
             if save_module:
-                lib.export_library(f"rt_libs/{module.uuid}_lib.so")
+                lib.export_library(f"{rt_libs_dir}/{module.uuid}_lib.so")
                 module.update_json(filename=rt_modules_json_file)
             m = graph_executor.GraphModule(lib["default"](ctx))
             module.set_runtime_module(m)

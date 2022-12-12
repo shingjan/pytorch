@@ -12,7 +12,13 @@ from tvm.relay.frontend.pytorch import _convert_data_type
 
 import torch
 
-rt_modules_json_file = "rt_libs/modules_llvm.json"
+
+save_module = True
+rt_modules_json_file = "rt_libs/modules_cuda.json"
+ctx = tvm.cuda(0)
+# ctx = tvm.cpu(0)
+target = tvm.target.Target("nvidia/geforce-rtx-3070")
+# target = tvm.target.Target("llvm --num-cores=16")
 
 
 class conv_runtime_module:
@@ -35,11 +41,13 @@ class conv_runtime_module:
         self.x_dtype = str(x_dtype)
         self.w_shape = list(w_shape)
         self.w_dtype = str(w_dtype)
+        # TODO(shingjan): bias could be tensor here
+        # Need to be handled like x, w
         self.bias = bias
         self.stride = list(stride)
         self.padding = list(padding)
         self.dilation = list(dilation)
-        self.transposed = transposed
+        self.transposed = bool(transposed)
         self.output_padding = list(output_padding)
         self.groups = int(groups)
         self.uuid = str(uuid)
@@ -97,11 +105,17 @@ class _conv:
     def __init__(self):
         # list of conv_runtime_modules
         self.modules = []
-        with open(rt_modules_json_file, "r+") as file:
-            file_data = json.load(file)
-            for mod in file_data["modules"]:
-                x = json.loads(mod, object_hook=lambda d: conv_runtime_module(**d))
-                self.modules.append(x)
+        if save_module:
+            with open(rt_modules_json_file, "r+") as file:
+                file_data = json.load(file)
+                for mod in file_data["modules"]:
+                    module = json.loads(
+                        mod, object_hook=lambda d: conv_runtime_module(**d)
+                    )
+                    lib = tvm.runtime.load_module(f"rt_libs/{module.uuid}_lib.so")
+                    m = graph_executor.GraphModule(lib["default"](ctx))
+                    module.set_runtime_module(m)
+                    self.modules.append(module)
 
     @staticmethod
     def convolution(
@@ -238,6 +252,7 @@ class _conv:
         for mod in self.modules:
             if mod.is_same(module):
                 module.uuid = mod.uuid
+                module.set_runtime_module(mod.get_runtime_module())
                 print("cache hit!")
                 return True
         return False
@@ -282,18 +297,16 @@ class _conv:
             )
             print(relay_func)
             mod = tvm.IRModule.from_expr(relay_func)
-            # target = tvm.target.cuda()
-            # target = tvm.target.Target("nvidia/geforce-rtx-3070")
-            target = tvm.target.Target("llvm --num-cores=16")
             lib = _conv.tune_with_tvm(mod, target, {})
-            lib.export_library(f"rt_libs/{module.uuid}_lib.so")
-            module.update_json(filename=rt_modules_json_file)
+            if save_module:
+                lib.export_library(f"rt_libs/{module.uuid}_lib.so")
+                module.update_json(filename=rt_modules_json_file)
+            m = graph_executor.GraphModule(lib["default"](ctx))
+            module.set_runtime_module(m)
             # put it back into the cache
             self.modules.append(module)
 
-        ctx = tvm.device("cpu", 0)
-        lib = tvm.runtime.load_module(f"rt_libs/{module.uuid}_lib.so")
-        m = graph_executor.GraphModule(lib["default"](ctx))
+        m = module.get_runtime_module()
         m.set_input("data", tvm.nd.from_dlpack(x.detach().contiguous()))
         m.set_input("weight", tvm.nd.from_dlpack(w.detach().contiguous()))
         m.run()

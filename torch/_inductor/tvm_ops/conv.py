@@ -1,5 +1,8 @@
 import uuid
 import json
+import os
+import pathlib
+from os.path import abspath
 
 import tvm
 from tvm import relay
@@ -14,7 +17,8 @@ import torch
 
 
 save_module = True
-rt_libs_dir = "/home/yj/pytorch/rt_libs"
+current_pt_dir = pathlib.Path(__file__).parent.parent.parent.parent.resolve()
+rt_libs_dir = f"{current_pt_dir}/rt_libs"
 rt_modules_json_file = f"{rt_libs_dir}/modules_cuda.json"
 ctx = tvm.cuda(0)
 # ctx = tvm.cpu(0)

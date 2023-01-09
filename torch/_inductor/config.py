@@ -155,6 +155,8 @@ class tvm:
     convolution = "tvm"
     # choose mm backend, "aten" or "tvm"
     mm = "aten"
+    # use tuning for convolution and mm workloads
+    tuning = False
 
 
 # create a directory containing lots of debug information

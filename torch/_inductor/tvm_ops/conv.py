@@ -16,7 +16,7 @@ from tvm.relay.frontend.pytorch import _convert_data_type
 import torch
 
 
-save_module = True
+save_module = False
 current_pt_dir = pathlib.Path(__file__).parent.parent.parent.parent.resolve()
 rt_libs_dir = f"{current_pt_dir}/rt_libs"
 rt_modules_json_file = f"{rt_libs_dir}/modules_cuda.json"
@@ -299,7 +299,6 @@ class _conv:
                 output_padding,
                 groups,
             )
-            print(relay_func)
             mod = tvm.IRModule.from_expr(relay_func)
             lib = _conv.tune_with_tvm(mod, target, {})
             if save_module:
@@ -314,7 +313,9 @@ class _conv:
         m.set_input("data", tvm.nd.from_dlpack(x.detach().contiguous()))
         m.set_input("weight", tvm.nd.from_dlpack(w.detach().contiguous()))
         m.run()
-        return torch.from_dlpack(m.get_output(0))
+        res = m.get_output(0)
+        output_tensor = tvm.nd.empty(res.shape, res.dtype, ctx).copyfrom(res)
+        return torch.from_dlpack(output_tensor)
 
     @staticmethod
     def tune_with_tvm(mod, target, params):

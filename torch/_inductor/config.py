@@ -143,8 +143,8 @@ class triton:
     # Synchronize after every kernel launch, to help pinpoint bugs
     debug_sync_kernel = False
 
-    # choose conv backend, "aten" or "triton" or "autotune"
-    convolution = "aten"
+    # choose conv backend, "aten" or "triton" or "autotune" or "tvm"
+    convolution = "tvm"
 
     # choose mm backend, "aten" or "triton" or "autotune"
     mm = "aten"
@@ -171,6 +171,13 @@ class triton:
     ordered_kernel_names = False
     # should we put op names in kernel names
     descriptive_kernel_names = True
+
+
+class tvm:
+    # save the tuned runtime library to a temporary directory
+    save_module = False
+    # use meta schedule for auto-tuning workloads
+    tuning = True
 
 
 # create a directory containing lots of debug information

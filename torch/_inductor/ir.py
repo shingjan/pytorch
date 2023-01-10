@@ -3169,6 +3169,9 @@ class Convolution(ExternKernelAlloc):
             wrapper.header.writeline(
                 f"import {config.inductor_import}.triton_ops.conv as {self.kernel}"
             )
+        elif self.kernel == "tvm_ops.conv":
+            wrapper.header.writeline(f"from torch._inductor import tvm_ops")
+
         wrapper.writeline(
             f"{self.get_name()} = {self.kernel}({', '.join(self.codegen_args())})"
         )
@@ -3231,7 +3234,9 @@ class Convolution(ExternKernelAlloc):
 
         # choose runtime kernel
         config_conv = config.triton.convolution
-        if (
+        if config_conv == "tvm":
+            kernel = "tvm_ops.conv"
+        elif (
             config_conv == "aten"
             or len(kernel_size) != 2  # triton conv only supports conv2d
             or not is_triton(x.get_device())

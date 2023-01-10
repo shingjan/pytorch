@@ -280,7 +280,7 @@ def should_use_template(node: ir.ExternKernel):
     template_kernels = [ir.Convolution, ir.MatrixMultiply]
     if type(node) in template_kernels and ir.is_triton(node.get_device()):
         if isinstance(node, ir.Convolution):
-            return node.kernel != "aten.convolution"
+            return node.kernel != "aten.convolution" and node.kernel != "tvm_ops.conv"
         elif isinstance(node, ir.MatrixMultiply):
             return node.kernel != "aten.mm.out"
     return False

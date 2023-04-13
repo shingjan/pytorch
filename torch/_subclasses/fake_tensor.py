@@ -413,7 +413,7 @@ def _sparse_coo_tensor_with_dims_and_tensors(fake_mode, func, *args, **kwargs):
 # index.Tensor data-dependent in only some conditions
 @register_op_impl(
     lambda func: torch.Tag.dynamic_output_shape in func.tags  # type: ignore[attr-defined]
-    and func not in [aten.index.Tensor, aten.nonzero.default]
+    and func not in [aten.index.Tensor, aten.nonzero.default, aten.repeat_interleave.Tensor]
 )
 def dyn_shape(fake_mode, func, *args, **kwargs):
     raise DynamicOutputShapeException(func)
@@ -507,6 +507,23 @@ def index_tensor(fake_mode, func, *args, **kwargs):
     # ensure nonzero call goes to fake tensor
     with fake_mode:
         out = meta_index_Tensor(*args, **kwargs)
+        return out.to(out_device)
+
+
+# take the device from input
+@register_op_impl(lambda func: func is torch.ops.aten.repeat_interleave.Tensor)
+def repeat_interleave_tensor(fake_mode, func, *args, **kwargs):
+    from torch._meta_registrations import meta_repeat_interleave_Tensor
+
+    _, new_kwargs = normalize_function(
+        func, args=args, kwargs=kwargs, normalize_to_only_use_kwargs=True
+    )
+    print(args)
+    print(kwargs)
+    # out_device = kwargs["input"].device
+
+    with fake_mode:
+        out = meta_repeat_interleave_Tensor(*args, **kwargs)
         return out.to(out_device)
 
 

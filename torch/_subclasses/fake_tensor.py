@@ -515,16 +515,11 @@ def index_tensor(fake_mode, func, *args, **kwargs):
 def repeat_interleave_tensor(fake_mode, func, *args, **kwargs):
     from torch._meta_registrations import meta_repeat_interleave_Tensor
 
-    _, new_kwargs = normalize_function(
-        func, args=args, kwargs=kwargs, normalize_to_only_use_kwargs=True
-    )
-    print(args)
-    print(kwargs)
-    # out_device = kwargs["input"].device
+    if 'output_size' not in kwargs:
+        raise DynamicOutputShapeException(func)
 
     with fake_mode:
-        out = meta_repeat_interleave_Tensor(*args, **kwargs)
-        return out.to(out_device)
+        return meta_repeat_interleave_Tensor(*args, **kwargs)
 
 
 # takes in multiple-devices, dont default to default device handling
